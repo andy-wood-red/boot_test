@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from paramiko import SSHClient
 from scp import SCPClient
 
+import os
+
 # Test unit IP, these will most likely be overridden by parameters passed into the script.
 llama_ip = '192.168.0.18'
 xione_ip = '192.168.0.171'
@@ -113,6 +115,11 @@ else:
            
 #    print('After parse; switch==',switch_ip,'platform==',platform_ip,'and num of iterations==',loops)
 
+#Before running the test make sure logs folder exists locally.
+    if not os.path.exists('./logs'):
+        os.makedirs('./logs')
+
+# The test loop
     for x in range(loops):
         # Turn on test unit and wait for a short period before seeing whether it booted OK.
         print(utc_time, 'turn on for test loop ', x)
