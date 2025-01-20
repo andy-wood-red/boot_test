@@ -12,6 +12,8 @@ from scp import SCPClient
 
 import os
 
+import sysd_analyze
+
 # Test unit IP, these will most likely be overridden by parameters passed into the script.
 llama_ip = '192.168.0.18'
 xione_ip = '192.168.0.171'
@@ -31,6 +33,8 @@ switch_off = "/rpc/Switch.Set?id=0&on=false"
 # Path to local copies of the log files to parse to see if EPG started.
 sky_logfile = './logs/sky-messages.log'
 sys_logfile = './logs/system.log'
+# Location to locally store obtained bootmetrics during this test cycle.
+bootmetrics_file = './logs/bootmetrics.txt'
 
 # Use for timestamps etc.
 utc_time = datetime.now(timezone.utc)
@@ -81,6 +85,26 @@ def switch(ip_addr,switch_state):
     r = requests.get(url)
     return
 
+# Function to parse and store systemd metrics.
+def store_metrics(metrics,file_location):
+    file = open(file_location,"a")
+    if not metrics:
+        print('Empty response found.')
+    else:
+        for metric in metrics:
+            file.write(metric + '\n')
+    file.close()
+    return
+
+# Function to parse and store systemd metrics.
+def timestamp_metrics(file_location):
+    file = open(file_location,"a")
+    utc_time = datetime.now(timezone.utc)
+    timestamp_str = utc_time.strftime('------- %Y-%m-%d  %H:%M:%S\n')
+    file.write(timestamp_str)
+    file.close()
+    return
+
 ###############################################################################
 # Main program starts here
 
@@ -119,14 +143,29 @@ else:
     if not os.path.exists('./logs'):
         os.makedirs('./logs')
 
+# If an old bootmetrics file exists it will be overwritten.
+    file = open(bootmetrics_file,"w")
+    utc_time = datetime.now(timezone.utc)
+    timestamp_str = utc_time.strftime('======== Test Started %Y-%m-%d  %H:%M:%S ========\n')
+    file.write(timestamp_str)
+    file.close()
+
+
 # The test loop
     for x in range(loops):
+        utc_time = datetime.now(timezone.utc)
         # Turn on test unit and wait for a short period before seeing whether it booted OK.
         print(utc_time, 'turn on for test loop ', x)
+        timestamp_metrics(bootmetrics_file)
         switch(switch_ip,'on')
         sleep(wait_for_full_boot)
 
-        # Get 
+        # Get systemd metrics and store them.
+        metrics = sysd_analyze.get_systemd_analyze_metrics(platform_ip,'')
+        store_metrics(metrics,bootmetrics_file)
+        metrics = sysd_analyze.get_system_metric(platform_ip,'cat /opt/logs/sky-messages.log | grep SpectrumBarGadget | grep complete')
+        store_metrics(metrics,bootmetrics_file)
+        # Get log files and parse for text indicating boot status.
         get_log_files()
         if check_for_epg() == 0:
             print('Log indicates EPG did not start.')
@@ -134,6 +173,7 @@ else:
             exit()
                 
         # Turn off and wait a few secs before repeating the process.
+        utc_time = datetime.now(timezone.utc)
         print(utc_time, 'turn off for test loop ', x)
         switch(switch_ip,'off')
         sleep(5)
